@@ -11,7 +11,7 @@ import UIKit
 class CanvasView: UIView {
     // MARK: Properties
     
-    let isPredictionEnabled = UIDevice.currentDevice().userInterfaceIdiom == .Pad
+    let isPredictionEnabled = UIDevice.current.userInterfaceIdiom == .pad
     let isTouchUpdatingEnabled = true
     
     var usePreciseLocations = false {
@@ -42,7 +42,7 @@ class CanvasView: UIView {
         in accessing the properties of the touch used as a key in the map table. `UITouch` properties should
         be accessed in `NSResponder` callbacks and methods called from them.
     */
-    let activeLines = NSMapTable.strongToStrongObjectsMapTable()
+    let activeLines = NSMapTable<AnyObject, AnyObject>.strongToStrongObjects()
     
     /**
         Holds a map of `UITouch` objects to `Line` objects whose touch has ended but still has points awaiting
@@ -52,7 +52,7 @@ class CanvasView: UIView {
         in accessing the properties of the touch used as a key in the map table. `UITouch` properties should
         be accessed in `NSResponder` callbacks and methods called from them.
     */
-    let pendingLines = NSMapTable.strongToStrongObjectsMapTable()
+    let pendingLines = NSMapTable<AnyObject, AnyObject>.strongToStrongObjects()
     
     /// A `CGContext` for drawing the last representation of lines no longer receiving updates into.
     lazy var frozenContext: CGContext = {
@@ -63,11 +63,11 @@ class CanvasView: UIView {
         size.height *= scale
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         
-        let context = CGBitmapContextCreate(nil, Int(size.width), Int(size.height), 8, 0, colorSpace, CGImageAlphaInfo.PremultipliedLast.rawValue)
+        let context = CGContext(data: nil, width: Int(size.width), height: Int(size.height), bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
 
-        CGContextSetLineCap(context!, .Round)
-        let transform = CGAffineTransformMakeScale(scale, scale)
-        CGContextConcatCTM(context!, transform)
+        context!.setLineCap(.round)
+        let transform = CGAffineTransform(scaleX: scale, y: scale)
+        context!.concatenate(transform)
         
         return context!
     }()
@@ -77,14 +77,14 @@ class CanvasView: UIView {
     
     // MARK: Drawing
     
-    override func drawRect(rect: CGRect) {
+    override func draw(_ rect: CGRect) {
         let context = UIGraphicsGetCurrentContext()!
         
-        CGContextSetLineCap(context, .Round)
+        context.setLineCap(.round)
 
         if (needsFullRedraw) {
             setFrozenImageNeedsUpdate()
-            CGContextClearRect(frozenContext, bounds)
+            frozenContext.clear(bounds)
             for array in [finishedLines,lines] {
                 for line in array {
                     line.drawCommitedPointsInContext(frozenContext, isDebuggingEnabled: isDebuggingEnabled, usePreciseLocation: usePreciseLocations)
@@ -93,10 +93,10 @@ class CanvasView: UIView {
             needsFullRedraw = false
         }
 
-        frozenImage = frozenImage ?? CGBitmapContextCreateImage(frozenContext)
+        frozenImage = frozenImage ?? frozenContext.makeImage()
         
         if let frozenImage = frozenImage {
-            CGContextDrawImage(context, bounds, frozenImage)
+            context.draw(frozenImage, in: bounds)
         }
         
         for line in lines {
@@ -121,27 +121,27 @@ class CanvasView: UIView {
     
     // MARK: Convenience
     
-    func drawTouches(touches: Set<UITouch>, withEvent event: UIEvent?) {
+    func drawTouches(_ touches: Set<UITouch>, withEvent event: UIEvent?) {
         var updateRect = CGRect.null
         
         for touch in touches {
             // Retrieve a line from `activeLines`. If no line exists, create one.
-            let line = activeLines.objectForKey(touch) as? Line ?? addActiveLineForTouch(touch)
+            let line = activeLines.object(forKey: touch) as? Line ?? addActiveLineForTouch(touch)
             
             /*
                 Remove prior predicted points and update the `updateRect` based on the removals. The touches 
                 used to create these points are predictions provided to offer additional data. They are stale 
                 by the time of the next event for this touch.
             */
-            updateRect.unionInPlace(line.removePointsWithType(.Predicted))
+            updateRect = updateRect.union(line.removePointsWithType(.Predicted))
             
             /*
                 Incorporate coalesced touch data. The data in the last touch in the returned array will match
                 the data of the touch supplied to `coalescedTouchesForTouch(_:)`
             */
-            let coalescedTouches = event?.coalescedTouchesForTouch(touch) ?? []
+            let coalescedTouches = event?.coalescedTouches(for: touch) ?? []
             let coalescedRect = addPointsOfType(.Coalesced, forTouches: coalescedTouches, toLine: line, currentUpdateRect: updateRect)
-            updateRect.unionInPlace(coalescedRect)
+            updateRect = updateRect.union(coalescedRect)
             
             /*
                 Incorporate predicted touch data. This sample draws predicted touches differently; however, 
@@ -150,16 +150,16 @@ class CanvasView: UIView {
                 this touch.
             */
             if isPredictionEnabled {
-                let predictedTouches = event?.predictedTouchesForTouch(touch) ?? []
+                let predictedTouches = event?.predictedTouches(for: touch) ?? []
                 let predictedRect = addPointsOfType(.Predicted, forTouches: predictedTouches, toLine: line, currentUpdateRect: updateRect)
-                updateRect.unionInPlace(predictedRect)
+                updateRect = updateRect.union(predictedRect)
             }
         }
         
-        setNeedsDisplayInRect(updateRect)
+        setNeedsDisplay(updateRect)
     }
     
-    func addActiveLineForTouch(touch: UITouch) -> Line {
+    func addActiveLineForTouch(_ touch: UITouch) -> Line {
         let newLine = Line()
         
         activeLines.setObject(newLine, forKey: touch)
@@ -169,31 +169,31 @@ class CanvasView: UIView {
         return newLine
     }
     
-    func addPointsOfType(type: LinePoint.PointType, forTouches touches: [UITouch], toLine line: Line, currentUpdateRect updateRect: CGRect) -> CGRect {
+    func addPointsOfType(_ type: LinePoint.PointType, forTouches touches: [UITouch], toLine line: Line, currentUpdateRect updateRect: CGRect) -> CGRect {
         var accumulatedRect = CGRect.null
         var type = type
 		
-        for (idx, touch) in touches.enumerate() {
-            let isStylus = touch.type == .Stylus
+        for (idx, touch) in touches.enumerated() {
+            let isStylus = touch.type == .stylus
             
             // The visualization displays non-`.Stylus` touches differently.
             if !isStylus {
-                type.unionInPlace(.Finger)
+                type.formUnion(.Finger)
             }
             
             // Touches with estimated properties require updates; add this information to the `PointType`.
             if isTouchUpdatingEnabled && !touch.estimatedProperties.isEmpty {
-                type.unionInPlace(.NeedsUpdate)
+                type.formUnion(.NeedsUpdate)
             }
             
             // The last touch in a set of `.Coalesced` touches is the originating touch. Track it differently.
             if type.contains(.Coalesced) && idx == touches.count - 1 {
-                type.subtractInPlace(.Coalesced)
-                type.unionInPlace(.Standard)
+                type.subtract(.Coalesced)
+                type.formUnion(.Standard)
             }
             
             let touchRect = line.addPointOfType(type, forTouch: touch)
-            accumulatedRect.unionInPlace(touchRect)
+            accumulatedRect = accumulatedRect.union(touchRect)
             
             commitLine(line)
         }
@@ -201,15 +201,15 @@ class CanvasView: UIView {
         return updateRect.union(accumulatedRect)
     }
     
-    func endTouches(touches: Set<UITouch>, cancel: Bool) {
+    func endTouches(_ touches: Set<UITouch>, cancel: Bool) {
         var updateRect = CGRect.null
         
         for touch in touches {
             // Skip over touches that do not correspond to an active line.
-            guard let line = activeLines.objectForKey(touch) as? Line else { continue }
+            guard let line = activeLines.object(forKey: touch) as? Line else { continue }
             
             // If this is a touch cancellation, cancel the associated line.
-            if cancel { updateRect.unionInPlace(line.cancel()) }
+            if cancel { updateRect = updateRect.union(line.cancel()) }
             
             // If the line is complete (no points needing updates) or updating isn't enabled, move the line to the `frozenImage`.
             if line.isComplete || !isTouchUpdatingEnabled {
@@ -221,21 +221,21 @@ class CanvasView: UIView {
             }
             
             // This touch is ending, remove the line corresponding to it from `activeLines`.
-            activeLines.removeObjectForKey(touch)
+            activeLines.removeObject(forKey: touch)
         }
         
-        setNeedsDisplayInRect(updateRect)
+        setNeedsDisplay(updateRect)
     }
     
-    func updateEstimatedPropertiesForTouches(touches: Set<NSObject>) {
+    func updateEstimatedPropertiesForTouches(_ touches: Set<NSObject>) {
         guard isTouchUpdatingEnabled, let touches = touches as? Set<UITouch> else { return }
         
         for touch in touches {
             var isPending = false
             
             // Look to retrieve a line from `activeLines`. If no line exists, look it up in `pendingLines`.
-            let possibleLine: Line? = activeLines.objectForKey(touch) as? Line ?? {
-                let pendingLine = pendingLines.objectForKey(touch) as? Line
+            let possibleLine: Line? = activeLines.object(forKey: touch) as? Line ?? {
+                let pendingLine = pendingLines.object(forKey: touch) as? Line
                 isPending = pendingLine != nil
                 return pendingLine
             }()
@@ -245,7 +245,7 @@ class CanvasView: UIView {
             
             switch line.updateWithTouch(touch) {
                 case (true, let updateRect):
-                    setNeedsDisplayInRect(updateRect)
+                    setNeedsDisplay(updateRect)
                 default:
                     ()
             }
@@ -253,7 +253,7 @@ class CanvasView: UIView {
             // If this update updated the last point requiring an update, move the line to the `frozenImage`.
             if isPending && line.isComplete {
                 finishLine(line)
-                pendingLines.removeObjectForKey(touch)
+                pendingLines.removeObject(forKey: touch)
             }
             // Otherwise, have the line add any points no longer requiring updates to the `frozenImage`.
             else {
@@ -263,19 +263,19 @@ class CanvasView: UIView {
         }
     }
     
-    func commitLine(line: Line) {
+    func commitLine(_ line: Line) {
         // Have the line draw any segments between points no longer being updated into the `frozenContext` and remove them from the line.
         line.drawFixedPointsInContext(frozenContext, isDebuggingEnabled: isDebuggingEnabled, usePreciseLocation: usePreciseLocations)
         setFrozenImageNeedsUpdate()
     }
     
-    func finishLine(line: Line) {
+    func finishLine(_ line: Line) {
         // Have the line draw any remaining segments into the `frozenContext`. All should be fixed now.
         line.drawFixedPointsInContext(frozenContext, isDebuggingEnabled: isDebuggingEnabled, usePreciseLocation: usePreciseLocations, commitAll: true)
         setFrozenImageNeedsUpdate()
         
         // Cease tracking this line now that it is finished.
-        lines.removeAtIndex(lines.indexOf(line)!)
+        lines.remove(at: lines.index(of: line)!)
 
         // Store into finished lines to allow for a full redraw on option changes.
         finishedLines.append(line)

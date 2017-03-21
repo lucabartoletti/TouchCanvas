@@ -16,7 +16,7 @@ class ViewController: UIViewController {
     let reticleView: ReticleView = {
         let view = ReticleView(frame: CGRect.null)
         view.translatesAutoresizingMaskIntoConstraints = false
-        view.hidden = true
+        view.isHidden = true
         
         return view
     }()
@@ -33,29 +33,29 @@ class ViewController: UIViewController {
     
     // MARK: Touch Handling
     
-    override func touchesBegan(touches: Set<UITouch>, withEvent event: UIEvent?) {
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         canvasView.drawTouches(touches, withEvent: event)
         
         if visualizeAzimuth {
             for touch in touches {
-                if touch.type == .Stylus {
-                    reticleView.hidden = false
+                if touch.type == .stylus {
+                    reticleView.isHidden = false
                     updateReticleViewWithTouch(touch, event: event)
                 }
             }
         }
     }
     
-    override func touchesMoved(touches: Set<UITouch>, withEvent event: UIEvent?) {
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
         canvasView.drawTouches(touches, withEvent: event)
         
         if visualizeAzimuth {
             for touch in touches {
-                if touch.type == .Stylus {
+                if touch.type == .stylus {
                     updateReticleViewWithTouch(touch, event: event)
                     
                     // Use the last predicted touch to update the reticle.
-                    guard let predictedTouch = event?.predictedTouchesForTouch(touch)?.last else { return }
+                    guard let predictedTouch = event?.predictedTouches(for: touch)?.last else { return }
                     
                     updateReticleViewWithTouch(predictedTouch, event: event, isPredicted: true)
                 }
@@ -63,72 +63,72 @@ class ViewController: UIViewController {
         }
     }
     
-    override func touchesEnded(touches: Set<UITouch>, withEvent event: UIEvent?) {
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         canvasView.drawTouches(touches, withEvent: event)
         canvasView.endTouches(touches, cancel: false)
         
         if visualizeAzimuth {
             for touch in touches {
-                if touch.type == .Stylus {
-                    reticleView.hidden = true
+                if touch.type == .stylus {
+                    reticleView.isHidden = true
                 }
             }
         }
     }
     
-    override func touchesCancelled(touches: Set<UITouch>, withEvent event: UIEvent?) {
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
 		canvasView.endTouches(touches, cancel: true)
         
         if visualizeAzimuth {
             for touch in touches {
-                if touch.type == .Stylus {
-                    reticleView.hidden = true
+                if touch.type == .stylus {
+                    reticleView.isHidden = true
                 }
             }
         }
     }
     
-    override func touchesEstimatedPropertiesUpdated(touches: Set<UITouch>) {
+    override func touchesEstimatedPropertiesUpdated(_ touches: Set<UITouch>) {
         canvasView.updateEstimatedPropertiesForTouches(touches)
     }
     
     // MARK: Actions
     
-    @IBAction func clearView(sender: UIBarButtonItem) {
+    @IBAction func clearView(_ sender: UIBarButtonItem) {
         canvasView.clear()
     }
     
-    @IBAction func toggleDebugDrawing(sender: UIButton) {
+    @IBAction func toggleDebugDrawing(_ sender: UIButton) {
         canvasView.isDebuggingEnabled = !canvasView.isDebuggingEnabled
         visualizeAzimuth = !visualizeAzimuth
-        sender.selected = canvasView.isDebuggingEnabled
+        sender.isSelected = canvasView.isDebuggingEnabled
     }
     
-    @IBAction func toggleUsePreciseLocations(sender: UIButton) {
+    @IBAction func toggleUsePreciseLocations(_ sender: UIButton) {
         canvasView.usePreciseLocations = !canvasView.usePreciseLocations
-        sender.selected = canvasView.usePreciseLocations
+        sender.isSelected = canvasView.usePreciseLocations
     }
     
     // MARK: Rotation
     
-    override func shouldAutorotate() -> Bool {
+    override var shouldAutorotate : Bool {
         return true
     }
     
-    override func supportedInterfaceOrientations() -> UIInterfaceOrientationMask {
-        return [.LandscapeLeft, .LandscapeRight]
+    override var supportedInterfaceOrientations : UIInterfaceOrientationMask {
+        return [.landscapeLeft, .landscapeRight]
     }
     
     // MARK: Convenience
     
-    func updateReticleViewWithTouch(touch: UITouch?, event: UIEvent?, isPredicted: Bool = false) {
-        guard let touch = touch where touch.type == .Stylus else { return }
+    func updateReticleViewWithTouch(_ touch: UITouch?, event: UIEvent?, isPredicted: Bool = false) {
+        guard let touch = touch, touch.type == .stylus else { return }
         
-        reticleView.predictedDotLayer.hidden = !isPredicted
-        reticleView.predictedLineLayer.hidden = !isPredicted
+        reticleView.predictedDotLayer.isHidden = !isPredicted
+        reticleView.predictedLineLayer.isHidden = !isPredicted
         
-        let azimuthAngle = touch.azimuthAngleInView(view)
-        let azimuthUnitVector = touch.azimuthUnitVectorInView(view)
+        let azimuthAngle = touch.azimuthAngle(in: view)
+        let azimuthUnitVector = touch.azimuthUnitVector(in: view)
         let altitudeAngle = touch.altitudeAngle
         
         if isPredicted {
@@ -137,7 +137,7 @@ class ViewController: UIViewController {
             reticleView.predictedAltitudeAngle = altitudeAngle
         }
         else {
-            let location = touch.preciseLocationInView(view)
+            let location = touch.preciseLocation(in: view)
             reticleView.center = location
             reticleView.actualAzimuthAngle = azimuthAngle
             reticleView.actualAzimuthUnitVector = azimuthUnitVector

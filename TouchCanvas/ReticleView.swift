@@ -65,16 +65,16 @@ class ReticleView: UIView {
         super.init(frame: frame)
         
         // Set the contentScaleFactor.
-        contentScaleFactor = UIScreen.mainScreen().scale
+        contentScaleFactor = UIScreen.main.scale
         
         reticleLayer.contentsGravity = kCAGravityCenter
         reticleLayer.position = layer.position
         layer.addSublayer(reticleLayer)
         
         configureDotLayer(layer: predictedDotLayer, withColor: predictedIndicatorColor)
-        predictedDotLayer.hidden = true
+        predictedDotLayer.isHidden = true
         configureLineLayer(layer: predictedLineLayer, withColor: predictedIndicatorColor)
-        predictedLineLayer.hidden = true
+        predictedLineLayer.isHidden = true
         
         configureDotLayer(layer: dotLayer, withColor: indicatorColor)
         configureLineLayer(layer: lineLayer, withColor: indicatorColor)
@@ -93,7 +93,7 @@ class ReticleView: UIView {
     
     // MARK: UIView Overrides
     
-    override func intrinsicContentSize() -> CGSize {
+    override var intrinsicContentSize : CGSize {
         return reticleImage.size
     }
     
@@ -115,27 +115,27 @@ class ReticleView: UIView {
         let imageSize = CGSize(width: imageRadius * 2, height: imageRadius * 2)
         UIGraphicsBeginImageContextWithOptions(imageSize, false, contentScaleFactor)
         let ctx = UIGraphicsGetCurrentContext()
-        CGContextTranslateCTM(ctx!, imageRadius, imageRadius)
-        CGContextSetLineWidth(ctx!, 2)
-        CGContextSetStrokeColorWithColor(ctx!, reticleColor.CGColor)
-        CGContextStrokeEllipseInRect(ctx!, CGRect(x: -radius, y: -radius, width: radius * 2, height: radius * 2))
+        ctx!.translateBy(x: imageRadius, y: imageRadius)
+        ctx!.setLineWidth(2)
+        ctx!.setStrokeColor(reticleColor.cgColor)
+        ctx!.strokeEllipse(in: CGRect(x: -radius, y: -radius, width: radius * 2, height: radius * 2))
         
         // Draw targeting lines.
-        let path = CGPathCreateMutable()
-        var transform = CGAffineTransformIdentity
+        let path = CGMutablePath()
+        var transform = CGAffineTransform.identity
         
         for _ in 0..<4 {
-            CGPathMoveToPoint(path, &transform, radius * 0.5, 0)
-            CGPathAddLineToPoint(path, &transform, radius * 1.15, 0)
-            transform = CGAffineTransformRotate(transform, CGFloat(M_PI_2))
+            path.move(to: CGPoint(x: radius * 0.5, y: 0), transform: transform)
+            path.addLine(to: CGPoint(x: radius * 1.15, y: 0), transform: transform)
+            transform = transform.rotated(by: CGFloat(M_PI_2))
         }
-        CGContextAddPath(ctx!, path)
-        CGContextStrokePath(ctx!)
+        ctx!.addPath(path)
+        ctx!.strokePath()
         
         reticleImage = UIGraphicsGetImageFromCurrentImageContext()
         UIGraphicsEndImageContext()
         
-        reticleLayer.contents = reticleImage.CGImage
+        reticleLayer.contents = reticleImage.cgImage
         reticleLayer.bounds = CGRect(x: 0, y: 0, width: imageRadius * 2, height: imageRadius * 2)
         reticleLayer.contentsScale = contentScaleFactor
     }
@@ -148,14 +148,14 @@ class ReticleView: UIView {
         layoutIndicatorForAzimuthAngle(actualAzimuthAngle, azimuthUnitVector: actualAzimuthUnitVector, altitudeAngle: actualAltitudeAngle, lineLayer: lineLayer, dotLayer: dotLayer)
     }
     
-    func layoutIndicatorForAzimuthAngle(azimuthAngle: CGFloat, azimuthUnitVector: CGVector, altitudeAngle: CGFloat, lineLayer targetLineLayer: CALayer, dotLayer targetDotLayer: CALayer) {
+    func layoutIndicatorForAzimuthAngle(_ azimuthAngle: CGFloat, azimuthUnitVector: CGVector, altitudeAngle: CGFloat, lineLayer targetLineLayer: CALayer, dotLayer targetDotLayer: CALayer) {
         let reticleBounds = reticleLayer.bounds
-        let centeringTransform = CGAffineTransformMakeTranslation(reticleBounds.width / 2, reticleBounds.height / 2)
+        let centeringTransform = CGAffineTransform(translationX: reticleBounds.width / 2, y: reticleBounds.height / 2)
         
-        var rotationTransform = CGAffineTransformMakeRotation(azimuthAngle)
+        var rotationTransform = CGAffineTransform(rotationAngle: azimuthAngle)
         
         // Draw the indicator opposite the azimuth by rotating pi radians, for easy visualization.
-        rotationTransform = CGAffineTransformRotate(rotationTransform, CGFloat(M_PI))
+        rotationTransform = rotationTransform.rotated(by: CGFloat(M_PI))
         
         /*
             Make the length of the indicator's line representative of the `altitudeAngle`. When the angle is
@@ -164,26 +164,26 @@ class ReticleView: UIView {
         */
         let altitudeRadius = (1.0 - altitudeAngle / CGFloat(M_PI_2)) * radius
         
-        var lineTransform = CGAffineTransformMakeScale(altitudeRadius, 1)
-        lineTransform = CGAffineTransformConcat(lineTransform, rotationTransform)
-        lineTransform = CGAffineTransformConcat(lineTransform, centeringTransform)
+        var lineTransform = CGAffineTransform(scaleX: altitudeRadius, y: 1)
+        lineTransform = lineTransform.concatenating(rotationTransform)
+        lineTransform = lineTransform.concatenating(centeringTransform)
         targetLineLayer.setAffineTransform(lineTransform)
         
-        var dotTransform = CGAffineTransformMakeTranslation(-azimuthUnitVector.dx * altitudeRadius, -azimuthUnitVector.dy * altitudeRadius)
-        dotTransform = CGAffineTransformConcat(dotTransform, centeringTransform)
+        var dotTransform = CGAffineTransform(translationX: -azimuthUnitVector.dx * altitudeRadius, y: -azimuthUnitVector.dy * altitudeRadius)
+        dotTransform = dotTransform.concatenating(centeringTransform)
         
         targetDotLayer.setAffineTransform(dotTransform)
     }
     
     func configureDotLayer(layer targetLayer: CALayer, withColor color: UIColor) {
-        targetLayer.backgroundColor = color.CGColor
+        targetLayer.backgroundColor = color.cgColor
         targetLayer.bounds = CGRect(x: 0, y: 0, width: dotRadius * 2, height: dotRadius * 2)
         targetLayer.cornerRadius = dotRadius
         targetLayer.position = CGPoint.zero
     }
     
     func configureLineLayer(layer targetLayer: CALayer, withColor color: UIColor) {
-        targetLayer.backgroundColor = color.CGColor
+        targetLayer.backgroundColor = color.cgColor
         targetLayer.bounds = CGRect(x: 0, y: 0, width: 1, height: lineWidth)
         targetLayer.anchorPoint = CGPoint(x: 0, y: 0.5)
         targetLayer.position = CGPoint.zero

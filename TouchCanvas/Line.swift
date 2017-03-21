@@ -24,16 +24,16 @@ class Line: NSObject {
         return pointsWaitingForUpdatesByEstimationIndex.count == 0
     }
     
-    func updateWithTouch(touch: UITouch) -> (Bool, CGRect) {
+    func updateWithTouch(_ touch: UITouch) -> (Bool, CGRect) {
         if  let estimationUpdateIndex = touch.estimationUpdateIndex,
             let point = pointsWaitingForUpdatesByEstimationIndex[estimationUpdateIndex] {
-            var rect = updateRectForExistingPoint(point)
+            let rect = updateRectForExistingPoint(point)
             let didUpdate = point.updateWithTouch(touch)
             if didUpdate {
-                rect.unionInPlace(updateRectForExistingPoint(point))
+                rect.union(updateRectForExistingPoint(point))
             }
             if point.estimatedPropertiesExpectingUpdates == [] {
-                pointsWaitingForUpdatesByEstimationIndex.removeValueForKey(estimationUpdateIndex)
+                pointsWaitingForUpdatesByEstimationIndex.removeValue(forKey: estimationUpdateIndex)
             }
             return (didUpdate,rect)
         }
@@ -42,7 +42,7 @@ class Line: NSObject {
     
     // MARK: Interface
     
-    func addPointOfType(pointType: LinePoint.PointType, forTouch touch: UITouch) -> CGRect {
+    func addPointOfType(_ pointType: LinePoint.PointType, forTouch touch: UITouch) -> CGRect {
         let previousPoint = points.last
         let previousSequenceNumber = previousPoint?.sequenceNumber ?? -1
         let point = LinePoint(touch: touch, sequenceNumber: previousSequenceNumber + 1, pointType:pointType)
@@ -60,7 +60,7 @@ class Line: NSObject {
         return updateRect
     }
     
-    func removePointsWithType(type: LinePoint.PointType) -> CGRect {
+    func removePointsWithType(_ type: LinePoint.PointType) -> CGRect {
         var updateRect = CGRect.null
         var priorPoint: LinePoint?
         
@@ -71,10 +71,10 @@ class Line: NSObject {
                 var rect = self.updateRectForLinePoint(point)
                 
                 if let priorPoint = priorPoint {
-                    rect.unionInPlace(updateRectForLinePoint(priorPoint))
+                    rect = rect.union(updateRectForLinePoint(priorPoint))
                 }
                 
-                updateRect.unionInPlace(rect)
+                updateRect = updateRect.union(rect)
             }
             
             priorPoint = point
@@ -89,7 +89,7 @@ class Line: NSObject {
         // Process each point in the line and accumulate the `CGRect` containing all the points.
         let updateRect = points.reduce(CGRect.null) { accumulated, point in
             // Update the type set to include `.Cancelled`.
-            point.pointType.unionInPlace(.Cancelled)
+            point.pointType.formUnion(.Cancelled)
             
             /*
                 Union the `CGRect` for this point with accumulated `CGRect` and return it. The result is
@@ -103,7 +103,7 @@ class Line: NSObject {
     
     // MARK: Drawing
     
-    func drawInContext(context: CGContext, isDebuggingEnabled: Bool, usePreciseLocation: Bool) {
+    func drawInContext(_ context: CGContext, isDebuggingEnabled: Bool, usePreciseLocation: Bool) {
         var maybePriorPoint: LinePoint?
         
         for point in points {
@@ -113,69 +113,69 @@ class Line: NSObject {
             }
             
             // This color will used by default for `.Standard` touches.
-            var color = UIColor.blackColor()
+            var color = UIColor.black
             
             let pointType = point.pointType
             if isDebuggingEnabled {
                 if pointType.contains(.Cancelled) {
-                    color = UIColor.redColor()
+                    color = UIColor.red
                 }
                 else if pointType.contains(.NeedsUpdate) {
-                    color = UIColor.orangeColor()
+                    color = UIColor.orange
                 }
                 else if pointType.contains(.Finger) {
-                    color = UIColor.purpleColor()
+                    color = UIColor.purple
                 }
                 else if pointType.contains(.Coalesced) {
-                    color = UIColor.greenColor()
+                    color = UIColor.green
                 }
                 else if pointType.contains(.Predicted) {
-                    color = UIColor.blueColor()
+                    color = UIColor.blue
                 }
             } else {
                 if pointType.contains(.Cancelled) {
-                    color = UIColor.clearColor()
+                    color = UIColor.clear
                 }
                 else if pointType.contains(.Finger) {
-                    color = UIColor.purpleColor()
+                    color = UIColor.purple
                 }
                 if pointType.contains(.Predicted) && !pointType.contains(.Cancelled) {
-                    color = color.colorWithAlphaComponent(0.5)
+                    color = color.withAlphaComponent(0.5)
                 }
             }
             
             let location = usePreciseLocation ? point.preciseLocation : point.location
             let priorLocation = usePreciseLocation ? priorPoint.preciseLocation : priorPoint.location
             
-            CGContextSetStrokeColorWithColor(context, color.CGColor)
+            context.setStrokeColor(color.cgColor)
             
-            CGContextBeginPath(context)
+            context.beginPath()
             
-            CGContextMoveToPoint(context, priorLocation.x, priorLocation.y)
-            CGContextAddLineToPoint(context, location.x, location.y)
+            context.move(to: CGPoint(x: priorLocation.x, y: priorLocation.y))
+            context.addLine(to: CGPoint(x: location.x, y: location.y))
             
-            CGContextSetLineWidth(context, point.magnitude)
-            CGContextStrokePath(context)
+            context.setLineWidth(point.magnitude)
+            context.strokePath()
             
             // Draw azimuith and elevation on all non-coalesced points when debugging.
             if isDebuggingEnabled && !pointType.contains(.Coalesced) && !pointType.contains(.Predicted) && !pointType.contains(.Finger) {
-                CGContextBeginPath(context)
-                CGContextSetStrokeColorWithColor(context, UIColor.redColor().CGColor)
-                CGContextSetLineWidth(context, 0.5);
-                CGContextMoveToPoint(context, location.x, location.y)
+                context.beginPath()
+                context.setStrokeColor(UIColor.red.cgColor)
+                context.setLineWidth(0.5);
+                context.move(to: CGPoint(x: location.x, y: location.y))
                 var targetPoint = CGPoint(x:0.5 + 10.0 * cos(point.altitudeAngle), y:0.0)
-                targetPoint = CGPointApplyAffineTransform(targetPoint, CGAffineTransformMakeRotation(point.azimuthAngle))
+                targetPoint = targetPoint.applying(CGAffineTransform(rotationAngle: point.azimuthAngle))
                 targetPoint.x += location.x
                 targetPoint.y += location.y
-                CGContextAddLineToPoint(context, targetPoint.x, targetPoint.y)
-                CGContextStrokePath(context)
+                context.addLine(to: CGPoint(x: targetPoint.x, y: targetPoint.y))
+                context.strokePath()
             }
             
             maybePriorPoint = point
         }
     }
     
-    func drawFixedPointsInContext(context: CGContext, isDebuggingEnabled: Bool, usePreciseLocation: Bool, commitAll: Bool = false) {
+    func drawFixedPointsInContext(_ context: CGContext, isDebuggingEnabled: Bool, usePreciseLocation: Bool, commitAll: Bool = false) {
         let allPoints = points
         var committing = [LinePoint]()
         
@@ -184,9 +184,9 @@ class Line: NSObject {
             points.removeAll()
         }
         else {
-            for (index, point) in allPoints.enumerate() {
+            for (index, point) in allPoints.enumerated() {
                 // Only points whose type does not include `.NeedsUpdate` or `.Predicted` and are not last or prior to last point can be committed.
-                guard point.pointType.intersect([.NeedsUpdate, .Predicted]).isEmpty && index < allPoints.count - 2 else {
+                guard point.pointType.intersection([.NeedsUpdate, .Predicted]).isEmpty && index < allPoints.count - 2 else {
                     committing.append(points.first!)
                     break
                 }
@@ -212,10 +212,10 @@ class Line: NSObject {
         }
         
         // Store the points being committed for redrawing later in a different style if needed.
-        committedPoints.appendContentsOf(committing)
+        committedPoints.append(contentsOf: committing)
     }
     
-    func drawCommitedPointsInContext(context: CGContext, isDebuggingEnabled: Bool, usePreciseLocation: Bool) {
+    func drawCommitedPointsInContext(_ context: CGContext, isDebuggingEnabled: Bool, usePreciseLocation: Bool) {
         let committedLine = Line()
         committedLine.points = committedPoints
         committedLine.drawInContext(context, isDebuggingEnabled: isDebuggingEnabled, usePreciseLocation: usePreciseLocation)
@@ -223,43 +223,43 @@ class Line: NSObject {
     
     // MARK: Convenience
     
-    func updateRectForLinePoint(point: LinePoint) -> CGRect {
+    func updateRectForLinePoint(_ point: LinePoint) -> CGRect {
         var rect = CGRect(origin: point.location, size: CGSize.zero)
         
         // The negative magnitude ensures an outset rectangle.
         let magnitude = -3 * point.magnitude - 2
-        rect.insetInPlace(dx: magnitude, dy: magnitude)
+        rect = rect.insetBy(dx: magnitude, dy: magnitude)
         
         return rect
     }
 
-    func updateRectForLinePoint(point: LinePoint, previousPoint optionalPreviousPoint: LinePoint? = nil) -> CGRect {
+    func updateRectForLinePoint(_ point: LinePoint, previousPoint optionalPreviousPoint: LinePoint? = nil) -> CGRect {
         var rect = CGRect(origin: point.location, size: CGSize.zero)
         
         var pointMagnitude = point.magnitude
 
         if let previousPoint = optionalPreviousPoint {
             pointMagnitude = max(pointMagnitude, previousPoint.magnitude)
-            rect = CGRectUnion(rect, CGRect(origin:previousPoint.location, size: CGSize.zero))
+            rect = rect.union(CGRect(origin:previousPoint.location, size: CGSize.zero))
         }
         
         // The negative magnitude ensures an outset rectangle.
         let magnitude = -3.0 * pointMagnitude - 2.0
-        rect.insetInPlace(dx: magnitude, dy: magnitude)
+        rect = rect.insetBy(dx: magnitude, dy: magnitude)
         
         return rect
     }
     
-    func updateRectForExistingPoint(point: LinePoint) -> CGRect {
+    func updateRectForExistingPoint(_ point: LinePoint) -> CGRect {
         var rect = updateRectForLinePoint(point)
         
         let arrayIndex = point.sequenceNumber - points.first!.sequenceNumber
         
         if arrayIndex > 0 {
-            rect = CGRectUnion(rect,updateRectForLinePoint(point, previousPoint: points[arrayIndex-1]))
+            rect = rect.union(updateRectForLinePoint(point, previousPoint: points[arrayIndex-1]))
         }
         if arrayIndex + 1 < points.count {
-            rect = CGRectUnion(rect,updateRectForLinePoint(point, previousPoint: points[arrayIndex+1]))
+            rect = rect.union(updateRectForLinePoint(point, previousPoint: points[arrayIndex+1]))
         }
         return rect
     }
@@ -270,7 +270,7 @@ class Line: NSObject {
 class LinePoint: NSObject  {
     // MARK: Types
     
-    struct PointType: OptionSetType {
+    struct PointType: OptionSet {
         // MARK: Properties
         
         let rawValue: Int
@@ -289,7 +289,7 @@ class LinePoint: NSObject  {
     // MARK: Properties
     
     var sequenceNumber: Int
-    let timestamp: NSTimeInterval
+    let timestamp: TimeInterval
     var force: CGFloat
     var location: CGPoint
     var preciseLocation: CGPoint
@@ -315,27 +315,26 @@ class LinePoint: NSObject  {
         
         timestamp = touch.timestamp
         let view = touch.view
-        location = touch.locationInView(view)
-        preciseLocation = touch.preciseLocationInView(view)
-        azimuthAngle = touch.azimuthAngleInView(view)
+        location = touch.location(in: view)
+        preciseLocation = touch.preciseLocation(in: view)
+        azimuthAngle = touch.azimuthAngle(in: view)
         estimatedProperties = touch.estimatedProperties
         estimatedPropertiesExpectingUpdates = touch.estimatedPropertiesExpectingUpdates
         altitudeAngle = touch.altitudeAngle
-        force = (type == .Stylus || touch.force > 0) ? touch.force : 1.0
+        force = (type == .stylus || touch.force > 0) ? touch.force : 1.0
         
         if !estimatedPropertiesExpectingUpdates.isEmpty {
-            self.pointType.unionInPlace(.NeedsUpdate)
+            self.pointType.formUnion(.NeedsUpdate)
         }
         
         estimationUpdateIndex = touch.estimationUpdateIndex
     }
     
-    func updateWithTouch(touch: UITouch) -> Bool {
-        guard let estimationUpdateIndex = touch.estimationUpdateIndex
-            where estimationUpdateIndex == estimationUpdateIndex else { return false }
+    func updateWithTouch(_ touch: UITouch) -> Bool {
+        guard let estimationUpdateIndex = touch.estimationUpdateIndex, estimationUpdateIndex == estimationUpdateIndex else { return false }
         
         // An array of the touch properties that may be of interest.
-        let touchProperties: [UITouchProperties] = [.Altitude, .Azimuth, .Force, .Location]
+        let touchProperties: [UITouchProperties] = [.altitude, .azimuth, .force, .location]
         
         // Iterate through possible properties.
         for expectedProperty in touchProperties {
@@ -344,32 +343,32 @@ class LinePoint: NSObject  {
             
             // Update the value of the point with the value from the touch's property.
             switch expectedProperty {
-                case UITouchProperties.Force:
+                case UITouchProperties.force:
                     force = touch.force
-                case UITouchProperties.Azimuth:
-                    azimuthAngle = touch.azimuthAngleInView(touch.view)
-                case UITouchProperties.Altitude:
+                case UITouchProperties.azimuth:
+                    azimuthAngle = touch.azimuthAngle(in: touch.view)
+                case UITouchProperties.altitude:
                     altitudeAngle = touch.altitudeAngle
-                case UITouchProperties.Location:
-                    location = touch.locationInView(touch.view)
-                    preciseLocation = touch.preciseLocationInView(touch.view)
+                case UITouchProperties.location:
+                    location = touch.location(in: touch.view)
+                    preciseLocation = touch.preciseLocation(in: touch.view)
                 default:
                     ()
             }
 
             if !touch.estimatedProperties.contains(expectedProperty) {
                 // Flag that this point now has a 'final' value for this property.
-                estimatedProperties.subtractInPlace(expectedProperty)
+                estimatedProperties.subtract(expectedProperty)
             }
             
             if !touch.estimatedPropertiesExpectingUpdates.contains(expectedProperty) {
                 // Flag that this point is no longer expecting updates for this property.
-                estimatedPropertiesExpectingUpdates.subtractInPlace(expectedProperty)
+                estimatedPropertiesExpectingUpdates.subtract(expectedProperty)
                 
                 if estimatedPropertiesExpectingUpdates.isEmpty {
                     // Flag that this point has been updated and no longer needs updates.
-                    pointType.subtractInPlace(.NeedsUpdate)
-                    pointType.unionInPlace(.Updated)
+                    pointType.subtract(.NeedsUpdate)
+                    pointType.formUnion(.Updated)
                 }
             }
         }
