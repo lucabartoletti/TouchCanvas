@@ -1,7 +1,7 @@
 # TouchCanvas
 A swift3 updated version of the "TouchCanvas" iPad Pro sample code.
 
-#Apple Readme:
+# Apple Readme:
 
 ## TouchCanvas: Using UITouch efficiently and effectively
 
